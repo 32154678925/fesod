@@ -42,6 +42,7 @@ import org.apache.fesod.sheet.write.handler.context.RowWriteHandlerContext;
 import org.apache.fesod.sheet.write.metadata.CollectionRowData;
 import org.apache.fesod.sheet.write.metadata.MapRowData;
 import org.apache.fesod.sheet.write.metadata.RowData;
+import org.apache.fesod.sheet.write.metadata.holder.AbstractWriteHolder;
 import org.apache.fesod.sheet.write.metadata.holder.WriteHolder;
 import org.apache.fesod.sheet.write.metadata.holder.WriteSheetHolder;
 import org.apache.poi.ss.usermodel.Cell;
@@ -63,10 +64,15 @@ public class ExcelWriteAddExecutor extends AbstractExcelWriteExecutor {
             data = new ArrayList<>();
         }
         WriteSheetHolder writeSheetHolder = writeContext.writeSheetHolder();
+        WriteHolder currentWriteHolder = writeContext.currentWriteHolder();
         int newRowIndex = writeSheetHolder.getNewRowIndexAndStartDoWrite();
-        if (writeSheetHolder.isNew()
-                && !writeSheetHolder.getExcelWriteHeadProperty().hasHead()) {
-            newRowIndex += writeContext.currentWriteHolder().relativeHeadRowIndex();
+        if (currentWriteHolder.isNew()) {
+            if(currentWriteHolder instanceof AbstractWriteHolder){
+                AbstractWriteHolder writeHolder = (AbstractWriteHolder) currentWriteHolder;
+                if(!writeHolder.getExcelWriteHeadProperty().hasHead()){
+                    newRowIndex += currentWriteHolder.relativeHeadRowIndex();
+                }
+            }
         }
         int relativeRowIndex = 0;
         for (Object oneRowData : data) {
