@@ -17,6 +17,12 @@
  * under the License.
  */
 
+/*
+ * This file is part of the Apache Fesod (Incubating) project, which was derived from Alibaba EasyExcel.
+ *
+ * Copyright (C) 2018-2024 Alibaba Group Holding Ltd.
+ */
+
 package org.apache.fesod.sheet.metadata.csv;
 
 import java.util.Iterator;
@@ -105,10 +111,10 @@ public class CsvRow implements Row {
 
     @Override
     public Cell getCell(int cellnum) {
-        if (cellnum >= cellList.size()) {
+        if (cellnum < 0 || cellnum >= cellList.size()) {
             return null;
         }
-        return cellList.get(cellnum - 1);
+        return cellList.get(cellnum);
     }
 
     @Override
@@ -134,7 +140,7 @@ public class CsvRow implements Row {
 
     @Override
     public int getPhysicalNumberOfCells() {
-        return getRowNum();
+        return cellList.size();
     }
 
     @Override

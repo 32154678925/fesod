@@ -17,6 +17,12 @@
  * under the License.
  */
 
+/*
+ * This file is part of the Apache Fesod (Incubating) project, which was derived from Alibaba EasyExcel.
+ *
+ * Copyright (C) 2018-2024 Alibaba Group Holding Ltd.
+ */
+
 package org.apache.fesod.sheet.write.metadata.holder;
 
 import java.util.ArrayList;
@@ -122,6 +128,11 @@ public abstract class AbstractWriteHolder extends AbstractHolder implements Writ
      * Default is {@code false}.
      */
     private Boolean orderByIncludeColumn;
+
+    /**
+     * Custom converters for this holder
+     */
+    private List<Converter<?>> customConverterList;
 
     /**
      * Write handler
@@ -255,12 +266,22 @@ public abstract class AbstractWriteHolder extends AbstractHolder implements Writ
 
         // Set converterMap
         if (parentAbstractWriteHolder == null) {
-            setConverterMap(DefaultConverterLoader.loadDefaultWriteConverter());
+            setConverterMap(new HashMap<>(DefaultConverterLoader.loadDefaultWriteConverter()));
         } else {
             setConverterMap(new HashMap<>(parentAbstractWriteHolder.getConverterMap()));
+            if (CollectionUtils.isNotEmpty(parentAbstractWriteHolder.getCustomConverterList())) {
+                for (Converter<?> converter : parentAbstractWriteHolder.getCustomConverterList()) {
+                    getConverterMap()
+                            .put(
+                                    ConverterKeyBuild.buildKey(
+                                            converter.supportJavaTypeKey(), converter.supportExcelTypeKey()),
+                                    converter);
+                }
+            }
         }
         if (writeBasicParameter.getCustomConverterList() != null
                 && !writeBasicParameter.getCustomConverterList().isEmpty()) {
+            this.customConverterList = writeBasicParameter.getCustomConverterList();
             for (Converter<?> converter : writeBasicParameter.getCustomConverterList()) {
                 getConverterMap()
                         .put(
