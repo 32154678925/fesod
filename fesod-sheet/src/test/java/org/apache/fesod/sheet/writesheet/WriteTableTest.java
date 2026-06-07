@@ -1,5 +1,8 @@
 package org.apache.fesod.sheet.writesheet;
 
+import java.io.File;
+import java.lang.reflect.Field;
+import java.util.*;
 import org.apache.fesod.sheet.ExcelWriter;
 import org.apache.fesod.sheet.FesodSheet;
 import org.apache.fesod.sheet.annotation.ExcelProperty;
@@ -14,10 +17,6 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
-import java.io.File;
-import java.lang.reflect.Field;
-import java.util.*;
-
 public class WriteTableTest {
 
     private static final String HEADER_STRING;
@@ -28,22 +27,22 @@ public class WriteTableTest {
             ExcelProperty annotation = field.getAnnotation(ExcelProperty.class);
             HEADER_STRING = annotation.value()[0];
         } catch (Exception e) {
-            throw new RuntimeException(
-                    "Failed to resolve @ExcelProperty header from WriteSheetData.string", e);
+            throw new RuntimeException("Failed to resolve @ExcelProperty header from WriteSheetData.string", e);
         }
     }
 
     @ParameterizedTest
-    @EnumSource(value = ExcelTypeEnum.class, names = {"XLS", "XLSX"})
+    @EnumSource(
+            value = ExcelTypeEnum.class,
+            names = {"XLS", "XLSX"})
     public void testWriteTableWithTitle(ExcelTypeEnum excelType) throws Exception {
         Random random = new Random();
         int offsetA = random.nextInt(10);
         int offsetB = random.nextInt(10);
-        int sizeA = random.nextInt(10)+1;
-        int sizeB = random.nextInt(10)+1;
+        int sizeA = random.nextInt(10) + 1;
+        int sizeB = random.nextInt(10) + 1;
 
-        File testFile = TestFileUtil.createNewFile(
-                "writesheet/write-table-title" + excelType.getValue());
+        File testFile = TestFileUtil.createNewFile("writesheet/write-table-title" + excelType.getValue());
 
         // ── write ────────────────────────────────────────────────────────────
 
@@ -51,11 +50,13 @@ public class WriteTableTest {
         ExcelWriterSheetBuilder sheetBuilder = write.sheet(0, "0");
         WriteSheet sheet = sheetBuilder.build();
 
-        WriteTable tableA = sheetBuilder.table(0)
+        WriteTable tableA = sheetBuilder
+                .table(0)
                 .head(WriteSheetData.class)
                 .relativeHeadRowIndex(offsetA)
                 .build();
-        WriteTable tableB = sheetBuilder.table(1)
+        WriteTable tableB = sheetBuilder
+                .table(1)
                 .relativeHeadRowIndex(offsetB)
                 .head(WriteSheetData.class)
                 .build();
@@ -77,7 +78,9 @@ public class WriteTableTest {
 
             Map<Integer, String> expected = buildExpectedWithTitle(offsetA, offsetB, sizeA, sizeB);
             int totalRows = expected.size();
-            Assertions.assertEquals(totalRows, excelSheet.getPhysicalNumberOfRows(),
+            Assertions.assertEquals(
+                    totalRows,
+                    excelSheet.getPhysicalNumberOfRows(),
                     "Sheet should have exactly " + totalRows + " rows "
                             + "(offsets: A=" + offsetA + " B=" + offsetB
                             + ", sizes: A=" + sizeA + " B=" + sizeB + ")");
@@ -86,14 +89,16 @@ public class WriteTableTest {
                 int rowIdx = entry.getKey();
                 String expectedValue = entry.getValue();
                 Row row = excelSheet.getRow(rowIdx);
-                Assertions.assertNotNull(row,
+                Assertions.assertNotNull(
+                        row,
                         "Expected row " + rowIdx + " with value '" + expectedValue
                                 + "' (A:" + offsetA + "/" + sizeA
                                 + " B:" + offsetB + "/" + sizeB + ")");
                 Cell cell = row.getCell(0);
-                Assertions.assertNotNull(cell,
-                        "Expected cell at row " + rowIdx);
-                Assertions.assertEquals(expectedValue, cell.getStringCellValue(),
+                Assertions.assertNotNull(cell, "Expected cell at row " + rowIdx);
+                Assertions.assertEquals(
+                        expectedValue,
+                        cell.getStringCellValue(),
                         "Row " + rowIdx + " expected '" + expectedValue + "' "
                                 + "(A:" + offsetA + "/" + sizeA
                                 + " B:" + offsetB + "/" + sizeB + ")");
@@ -102,18 +107,19 @@ public class WriteTableTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = ExcelTypeEnum.class, names = {"XLS", "XLSX"})
+    @EnumSource(
+            value = ExcelTypeEnum.class,
+            names = {"XLS", "XLSX"})
     public void testWriteTableWithoutTitle(ExcelTypeEnum excelType) throws Exception {
         Random random = new Random();
         int offsetC = random.nextInt(10);
         int offsetA = random.nextInt(10);
         int offsetB = random.nextInt(10);
-        int sizeC = random.nextInt(10)+1;
-        int sizeA = random.nextInt(10)+1;
-        int sizeB = random.nextInt(10)+1;
+        int sizeC = random.nextInt(10) + 1;
+        int sizeA = random.nextInt(10) + 1;
+        int sizeB = random.nextInt(10) + 1;
 
-        File testFile = TestFileUtil.createNewFile(
-                "writesheet/write-table-notitle" + excelType.getValue());
+        File testFile = TestFileUtil.createNewFile("writesheet/write-table-notitle" + excelType.getValue());
 
         // ── write ────────────────────────────────────────────────────────────
 
@@ -121,15 +127,9 @@ public class WriteTableTest {
         ExcelWriterSheetBuilder sheetBuilder = write.sheet(0, "0");
         WriteSheet sheet = sheetBuilder.build();
 
-        WriteSheet collect = sheetBuilder
-                .relativeHeadRowIndex(offsetC)
-                .build();
-        WriteTable tableA = sheetBuilder.table(0)
-                .relativeHeadRowIndex(offsetA)
-                .build();
-        WriteTable tableB = sheetBuilder.table(1)
-                .relativeHeadRowIndex(offsetB)
-                .build();
+        WriteSheet collect = sheetBuilder.relativeHeadRowIndex(offsetC).build();
+        WriteTable tableA = sheetBuilder.table(0).relativeHeadRowIndex(offsetA).build();
+        WriteTable tableB = sheetBuilder.table(1).relativeHeadRowIndex(offsetB).build();
 
         try (ExcelWriter writer = write.build()) {
             writer.write(getList(sizeC, "C-"), collect);
@@ -147,10 +147,11 @@ public class WriteTableTest {
             Sheet excelSheet = workbook.getSheetAt(0);
             Assertions.assertNotNull(excelSheet, "Sheet '0' should exist");
 
-            Map<Integer, String> expected = buildExpectedWithoutTitle(
-                    offsetC, offsetA, offsetB, sizeC, sizeA, sizeB);
+            Map<Integer, String> expected = buildExpectedWithoutTitle(offsetC, offsetA, offsetB, sizeC, sizeA, sizeB);
             int totalRows = expected.size();
-            Assertions.assertEquals(totalRows, excelSheet.getPhysicalNumberOfRows(),
+            Assertions.assertEquals(
+                    totalRows,
+                    excelSheet.getPhysicalNumberOfRows(),
                     "Sheet should have exactly " + totalRows + " rows "
                             + "(C:" + offsetC + "/" + sizeC
                             + " A:" + offsetA + "/" + sizeA
@@ -160,15 +161,17 @@ public class WriteTableTest {
                 int rowIdx = entry.getKey();
                 String expectedValue = entry.getValue();
                 Row row = excelSheet.getRow(rowIdx);
-                Assertions.assertNotNull(row,
+                Assertions.assertNotNull(
+                        row,
                         "Expected row " + rowIdx + " with value '" + expectedValue
                                 + "' (C:" + offsetC + "/" + sizeC
                                 + " A:" + offsetA + "/" + sizeA
                                 + " B:" + offsetB + "/" + sizeB + ")");
                 Cell cell = row.getCell(0);
-                Assertions.assertNotNull(cell,
-                        "Expected cell at row " + rowIdx);
-                Assertions.assertEquals(expectedValue, cell.getStringCellValue(),
+                Assertions.assertNotNull(cell, "Expected cell at row " + rowIdx);
+                Assertions.assertEquals(
+                        expectedValue,
+                        cell.getStringCellValue(),
                         "Row " + rowIdx + " expected '" + expectedValue + "' "
                                 + "(C:" + offsetC + "/" + sizeC
                                 + " A:" + offsetA + "/" + sizeA
@@ -183,11 +186,10 @@ public class WriteTableTest {
      * Build expected row map for with-title tables.
      * Tables are sequential: B starts after A's last row + offsetB empty rows.
      */
-    private static Map<Integer, String> buildExpectedWithTitle(
-            int offsetA, int offsetB, int sizeA, int sizeB) {
+    private static Map<Integer, String> buildExpectedWithTitle(int offsetA, int offsetB, int sizeA, int sizeB) {
         Map<Integer, String> expected = new LinkedHashMap<>();
 
-        // Table A: head at offsetA, data at offsetA+1 .. offsetA+sizeA
+        // Table A: head at offsetA, data at offsetA+1 ... offsetA+sizeA
         expected.put(offsetA, HEADER_STRING);
         for (int i = 0; i < sizeA; i++) {
             expected.put(offsetA + 1 + i, "A-" + i);
@@ -211,7 +213,7 @@ public class WriteTableTest {
             int offsetC, int offsetA, int offsetB, int sizeC, int sizeA, int sizeB) {
         Map<Integer, String> expected = new LinkedHashMap<>();
 
-        // collect: data at offsetC .. offsetC+sizeC-1
+        // collect: data at offsetC ... offsetC+sizeC-1
         for (int i = 0; i < sizeC; i++) {
             expected.put(offsetC + i, "C-" + i);
         }
