@@ -1,247 +1,138 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package org.apache.fesod.sheet.writesheet;
 
 import java.io.File;
-import java.lang.reflect.Field;
 import java.util.*;
+import java.util.stream.Stream;
+import lombok.Data;
 import org.apache.fesod.sheet.ExcelWriter;
 import org.apache.fesod.sheet.FesodSheet;
+import org.apache.fesod.sheet.annotation.ExcelIgnoreUnannotated;
 import org.apache.fesod.sheet.annotation.ExcelProperty;
 import org.apache.fesod.sheet.support.ExcelTypeEnum;
 import org.apache.fesod.sheet.util.TestFileUtil;
-import org.apache.fesod.sheet.write.builder.ExcelWriterBuilder;
 import org.apache.fesod.sheet.write.builder.ExcelWriterSheetBuilder;
-import org.apache.fesod.sheet.write.metadata.WriteSheet;
-import org.apache.fesod.sheet.write.metadata.WriteTable;
+import org.apache.fesod.sheet.write.builder.ExcelWriterTableBuilder;
 import org.apache.poi.ss.usermodel.*;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 public class WriteTableTest {
 
-    private static final String HEADER_STRING;
+    @Data
+    @ExcelIgnoreUnannotated
+    public static class WriteSheetData {
+        @ExcelProperty("Title")
+        private String string;
+    }
 
-    static {
-        try {
-            Field field = WriteSheetData.class.getDeclaredField("string");
-            ExcelProperty annotation = field.getAnnotation(ExcelProperty.class);
-            HEADER_STRING = annotation.value()[0];
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to resolve @ExcelProperty header from WriteSheetData.string", e);
-        }
+    private static final List<List<Integer>> OFFSETS = Arrays.asList(
+            Arrays.asList(0, 0, 0), Arrays.asList(0, 1, 3), Arrays.asList(1, 0, 2), Arrays.asList(2, 3, 0));
+
+    static Stream<Arguments> testData() {
+        return Stream.of(Arguments.of(ExcelTypeEnum.XLSX, OFFSETS), Arguments.of(ExcelTypeEnum.XLS, OFFSETS));
     }
 
     @ParameterizedTest
-    @EnumSource(
-            value = ExcelTypeEnum.class,
-            names = {"XLS", "XLSX"})
-    public void testWriteTableWithTitle(ExcelTypeEnum excelType) throws Exception {
-        Random random = new Random();
-        int offsetA = random.nextInt(10);
-        int offsetB = random.nextInt(10);
-        int sizeA = random.nextInt(10) + 1;
-        int sizeB = random.nextInt(10) + 1;
+    @MethodSource("testData")
+    public void testWriteTable(ExcelTypeEnum excelType, List<List<Integer>> offsets) throws Exception {
+        int n = offsets.size();
 
-        File testFile = TestFileUtil.createNewFile("writesheet/write-table-title" + excelType.getValue());
+        File testFile = TestFileUtil.createNewFile("writesheet/write-table" + excelType.getValue());
 
-        // ── write ────────────────────────────────────────────────────────────
-
-        ExcelWriterBuilder write = FesodSheet.write(testFile);
-        ExcelWriterSheetBuilder sheetBuilder = write.sheet(0, "0");
-        WriteSheet sheet = sheetBuilder.build();
-
-        WriteTable tableA = sheetBuilder
-                .table(0)
-                .head(WriteSheetData.class)
-                .relativeHeadRowIndex(offsetA)
-                .build();
-        WriteTable tableB = sheetBuilder
-                .table(1)
-                .relativeHeadRowIndex(offsetB)
-                .head(WriteSheetData.class)
-                .build();
-
-        try (ExcelWriter writer = write.build()) {
-            writer.write(getList(sizeA, "A-"), sheet, tableA);
-            writer.write(getList(sizeB, "B-"), sheet, tableB);
-            writer.finish();
+        try (ExcelWriter write = FesodSheet.write(testFile).excelType(excelType).build()) {
+            writeSheets(write, offsets, 0, "T", true);
+            writeSheets(write, offsets, n, "U", false);
         }
 
         Assertions.assertTrue(testFile.exists(), "Written file should exist");
         Assertions.assertTrue(testFile.length() > 0, "Written file should not be empty");
 
-        // ── read & assert ────────────────────────────────────────────────────
-
         try (Workbook workbook = WorkbookFactory.create(testFile)) {
-            Sheet excelSheet = workbook.getSheetAt(0);
-            Assertions.assertNotNull(excelSheet, "Sheet '0' should exist");
-
-            Map<Integer, String> expected = buildExpectedWithTitle(offsetA, offsetB, sizeA, sizeB);
-            int totalRows = expected.size();
-            Assertions.assertEquals(
-                    totalRows,
-                    excelSheet.getPhysicalNumberOfRows(),
-                    "Sheet should have exactly " + totalRows + " rows "
-                            + "(offsets: A=" + offsetA + " B=" + offsetB
-                            + ", sizes: A=" + sizeA + " B=" + sizeB + ")");
-
-            for (Map.Entry<Integer, String> entry : expected.entrySet()) {
-                int rowIdx = entry.getKey();
-                String expectedValue = entry.getValue();
-                Row row = excelSheet.getRow(rowIdx);
-                Assertions.assertNotNull(
-                        row,
-                        "Expected row " + rowIdx + " with value '" + expectedValue
-                                + "' (A:" + offsetA + "/" + sizeA
-                                + " B:" + offsetB + "/" + sizeB + ")");
-                Cell cell = row.getCell(0);
-                Assertions.assertNotNull(cell, "Expected cell at row " + rowIdx);
-                Assertions.assertEquals(
-                        expectedValue,
-                        cell.getStringCellValue(),
-                        "Row " + rowIdx + " expected '" + expectedValue + "' "
-                                + "(A:" + offsetA + "/" + sizeA
-                                + " B:" + offsetB + "/" + sizeB + ")");
+            Iterator<Sheet> it = workbook.sheetIterator();
+            for (int i = 0; i < n; i++) {
+                Assertions.assertTrue(it.hasNext(), "titled sheet " + i + " should exist");
+                verifyRows(it.next(), true, offsets.get(i));
+            }
+            for (int i = 0; i < n; i++) {
+                Assertions.assertTrue(it.hasNext(), "untitled sheet " + i + " should exist");
+                verifyRows(it.next(), false, offsets.get(i));
             }
         }
     }
 
-    @ParameterizedTest
-    @EnumSource(
-            value = ExcelTypeEnum.class,
-            names = {"XLS", "XLSX"})
-    public void testWriteTableWithoutTitle(ExcelTypeEnum excelType) throws Exception {
-        Random random = new Random();
-        int offsetC = random.nextInt(10);
-        int offsetA = random.nextInt(10);
-        int offsetB = random.nextInt(10);
-        int sizeC = random.nextInt(10) + 1;
-        int sizeA = random.nextInt(10) + 1;
-        int sizeB = random.nextInt(10) + 1;
-
-        File testFile = TestFileUtil.createNewFile("writesheet/write-table-notitle" + excelType.getValue());
-
-        // ── write ────────────────────────────────────────────────────────────
-
-        ExcelWriterBuilder write = FesodSheet.write(testFile);
-        ExcelWriterSheetBuilder sheetBuilder = write.sheet(0, "0");
-        WriteSheet sheet = sheetBuilder.build();
-
-        WriteSheet collect = sheetBuilder.relativeHeadRowIndex(offsetC).build();
-        WriteTable tableA = sheetBuilder.table(0).relativeHeadRowIndex(offsetA).build();
-        WriteTable tableB = sheetBuilder.table(1).relativeHeadRowIndex(offsetB).build();
-
-        try (ExcelWriter writer = write.build()) {
-            writer.write(getList(sizeC, "C-"), collect);
-            writer.write(getList(sizeA, "A-"), sheet, tableA);
-            writer.write(getList(sizeB, "B-"), sheet, tableB);
-            writer.finish();
-        }
-
-        Assertions.assertTrue(testFile.exists(), "Written file should exist");
-        Assertions.assertTrue(testFile.length() > 0, "Written file should not be empty");
-
-        // ── read & assert ────────────────────────────────────────────────────
-
-        try (Workbook workbook = WorkbookFactory.create(testFile)) {
-            Sheet excelSheet = workbook.getSheetAt(0);
-            Assertions.assertNotNull(excelSheet, "Sheet '0' should exist");
-
-            Map<Integer, String> expected = buildExpectedWithoutTitle(offsetC, offsetA, offsetB, sizeC, sizeA, sizeB);
-            int totalRows = expected.size();
-            Assertions.assertEquals(
-                    totalRows,
-                    excelSheet.getPhysicalNumberOfRows(),
-                    "Sheet should have exactly " + totalRows + " rows "
-                            + "(C:" + offsetC + "/" + sizeC
-                            + " A:" + offsetA + "/" + sizeA
-                            + " B:" + offsetB + "/" + sizeB + ")");
-
-            for (Map.Entry<Integer, String> entry : expected.entrySet()) {
-                int rowIdx = entry.getKey();
-                String expectedValue = entry.getValue();
-                Row row = excelSheet.getRow(rowIdx);
-                Assertions.assertNotNull(
-                        row,
-                        "Expected row " + rowIdx + " with value '" + expectedValue
-                                + "' (C:" + offsetC + "/" + sizeC
-                                + " A:" + offsetA + "/" + sizeA
-                                + " B:" + offsetB + "/" + sizeB + ")");
-                Cell cell = row.getCell(0);
-                Assertions.assertNotNull(cell, "Expected cell at row " + rowIdx);
-                Assertions.assertEquals(
-                        expectedValue,
-                        cell.getStringCellValue(),
-                        "Row " + rowIdx + " expected '" + expectedValue + "' "
-                                + "(C:" + offsetC + "/" + sizeC
-                                + " A:" + offsetA + "/" + sizeA
-                                + " B:" + offsetB + "/" + sizeB + ")");
+    private static void writeSheets(
+            ExcelWriter write, List<List<Integer>> offsets, int startSheetNo, String namePrefix, boolean isTitled) {
+        int n = offsets.size();
+        for (int i = 0; i < n; i++) {
+            ExcelWriterSheetBuilder sheet =
+                    FesodSheet.writerSheet().sheetNo(startSheetNo + i).sheetName(namePrefix + i);
+            List<Integer> rowOffsets = offsets.get(i);
+            for (int j = 0; j < rowOffsets.size(); j++) {
+                ExcelWriterTableBuilder table = FesodSheet.writerTable()
+                        .relativeHeadRowIndex(rowOffsets.get(j))
+                        .tableNo(j);
+                if (isTitled) {
+                    table.head(WriteSheetData.class);
+                }
+                write.write(getList((char) ('A' + j)), sheet.build(), table.build());
             }
         }
     }
 
-    // ── expected-row builders ────────────────────────────────────────────────
-
-    /**
-     * Build expected row map for with-title tables.
-     * Tables are sequential: B starts after A's last row + offsetB empty rows.
-     */
-    private static Map<Integer, String> buildExpectedWithTitle(int offsetA, int offsetB, int sizeA, int sizeB) {
-        Map<Integer, String> expected = new LinkedHashMap<>();
-
-        // Table A: head at offsetA, data at offsetA+1 ... offsetA+sizeA
-        expected.put(offsetA, HEADER_STRING);
-        for (int i = 0; i < sizeA; i++) {
-            expected.put(offsetA + 1 + i, "A-" + i);
+    private static void verifyRows(Sheet sheet, boolean isTitled, List<Integer> offsets) {
+        int rowIdx = 0;
+        char prefix = 'A';
+        for (int offset : offsets) {
+            if (isTitled) {
+                Row headerRow = sheet.getRow(rowIdx + offset);
+                Assertions.assertNotNull(headerRow, "Header row " + (rowIdx + offset) + " missing");
+                Assertions.assertEquals(
+                        "Title",
+                        headerRow.getCell(0).getStringCellValue(),
+                        "Row " + (rowIdx + offset) + " should be header");
+                rowIdx += offset + 1;
+            } else {
+                rowIdx += offset;
+            }
+            for (int j = 0; j < 2; j++) {
+                Row row = sheet.getRow(rowIdx + j);
+                Assertions.assertNotNull(row, "Data row " + (rowIdx + j) + " missing");
+                Assertions.assertEquals(
+                        prefix + "-" + j, row.getCell(0).getStringCellValue(), "Row " + (rowIdx + j) + " mismatch");
+            }
+            rowIdx += 2;
+            prefix++;
         }
-
-        // Table B: offsetB empty rows after A's last row, then head + data
-        int bHeadRow = offsetA + sizeA + offsetB + 1;
-        expected.put(bHeadRow, HEADER_STRING);
-        for (int i = 0; i < sizeB; i++) {
-            expected.put(bHeadRow + 1 + i, "B-" + i);
-        }
-
-        return expected;
     }
 
-    /**
-     * Build expected row map for headerless writes.
-     * Tables are sequential: each starts after the previous one's last row + offset.
-     */
-    private static Map<Integer, String> buildExpectedWithoutTitle(
-            int offsetC, int offsetA, int offsetB, int sizeC, int sizeA, int sizeB) {
-        Map<Integer, String> expected = new LinkedHashMap<>();
-
-        // collect: data at offsetC ... offsetC+sizeC-1
-        for (int i = 0; i < sizeC; i++) {
-            expected.put(offsetC + i, "C-" + i);
+    private static List<WriteSheetData> getList(char prefix) {
+        List<WriteSheetData> list = new ArrayList<>();
+        for (int j = 0; j < 2; j++) {
+            WriteSheetData d = new WriteSheetData();
+            d.setString(prefix + "-" + j);
+            list.add(d);
         }
-
-        // tableA: starts after collect's last row + offsetA empty rows
-        int aStartRow = offsetC + sizeC + offsetA;
-        for (int i = 0; i < sizeA; i++) {
-            expected.put(aStartRow + i, "A-" + i);
-        }
-
-        // tableB: starts after A's last row + offsetB empty rows
-        int bStartRow = aStartRow + sizeA + offsetB;
-        for (int i = 0; i < sizeB; i++) {
-            expected.put(bStartRow + i, "B-" + i);
-        }
-
-        return expected;
-    }
-
-    // ── helper ───────────────────────────────────────────────────────────────
-
-    private static List<WriteSheetData> getList(int size, String prefix) {
-        List<WriteSheetData> dataList = new ArrayList<>();
-        for (int j = 0; j < size; j++) {
-            WriteSheetData data = new WriteSheetData();
-            data.setString(prefix + j);
-            dataList.add(data);
-        }
-        return dataList;
+        return list;
     }
 }
