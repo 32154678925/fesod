@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.fesod.sheet.writesheet;
+package org.apache.fesod.sheet.sheet;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -30,8 +30,9 @@ import org.apache.fesod.sheet.ExcelWriter;
 import org.apache.fesod.sheet.FesodSheet;
 import org.apache.fesod.sheet.annotation.ExcelIgnoreUnannotated;
 import org.apache.fesod.sheet.annotation.ExcelProperty;
-import org.apache.fesod.sheet.support.ExcelTypeEnum;
-import org.apache.fesod.sheet.util.TestFileUtil;
+import org.apache.fesod.sheet.testkit.Tags;
+import org.apache.fesod.sheet.testkit.base.AbstractExcelTest;
+import org.apache.fesod.sheet.testkit.enums.ExcelFormat;
 import org.apache.fesod.sheet.write.builder.ExcelWriterSheetBuilder;
 import org.apache.fesod.sheet.write.builder.ExcelWriterTableBuilder;
 import org.apache.poi.ss.usermodel.Row;
@@ -39,11 +40,13 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-public class WriteTableTest {
+@Tag(Tags.ROUND_TRIP)
+public class WriteTableTest extends AbstractExcelTest {
 
     @Data
     @ExcelIgnoreUnannotated
@@ -56,17 +59,19 @@ public class WriteTableTest {
             Arrays.asList(0, 0, 0), Arrays.asList(0, 1, 3), Arrays.asList(1, 0, 2), Arrays.asList(2, 3, 0));
 
     static Stream<Arguments> testData() {
-        return Stream.of(Arguments.of(ExcelTypeEnum.XLSX, OFFSETS), Arguments.of(ExcelTypeEnum.XLS, OFFSETS));
+        return Stream.of(Arguments.of(ExcelFormat.XLSX, OFFSETS), Arguments.of(ExcelFormat.XLS, OFFSETS));
     }
 
     @ParameterizedTest
     @MethodSource("testData")
-    public void testWriteTable(ExcelTypeEnum excelType, List<List<Integer>> offsets) throws Exception {
+    public void testWriteTable(ExcelFormat excelFormat, List<List<Integer>> offsets) throws Exception {
         int n = offsets.size();
 
-        File testFile = TestFileUtil.createNewFile("writesheet/write-table" + excelType.getValue());
+        File testFile = createTempFile(excelFormat);
 
-        try (ExcelWriter write = FesodSheet.write(testFile).excelType(excelType).build()) {
+        try (ExcelWriter write = FesodSheet.write(testFile)
+                .excelType(excelFormat.toExcelTypeEnum())
+                .build()) {
             writeSheets(write, offsets, 0, "T", true);
             writeSheets(write, offsets, n, "U", false);
         }
